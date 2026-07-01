@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """swear-filter UserPromptSubmit hook.
 
-Reads the hook payload from stdin, censors profanity in the submitted
-prompt using regex, and returns the censored text to Claude as additional
-context along with an instruction to work from the cleaned version.
+Reads the hook payload from stdin and rewrites profanity in the submitted
+prompt into neutral wording *before* Claude ingests it. The goal is narrow:
+stop the model from taking in language that disparages its own work (e.g.
+"this shitty code") — not to police person-directed slurs.
 
-Claude Code cannot rewrite the prompt already shown in the user's
-terminal, so this hook injects the censored prompt and tells Claude to
-treat *that* as the real message and to keep its own replies clean.
+Each profane term is mapped to a replacement (see config/wordlist.txt), so
+"shit" -> "things", "shitty" -> "poor", intensifiers like "fucking" are
+dropped entirely. The censored prompt is injected back as additional
+context and Claude is told to treat it as the real request.
 """
 
 import json
@@ -20,15 +22,14 @@ def _plugin_root() -> str:
     env = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if env:
         return env
-    # hooks/ -> plugin root
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def load_words() -> list:
-    """Load the profanity list from wordlist.txt (one word per line).
+def load_map() -> list:
+    """Load the substitution map as a list of (term, replacement) pairs.
 
-    A user override can live at $CLAUDE_PLUGIN_ROOT/config/wordlist.txt or
-    be pointed to via SWEAR_FILTER_WORDLIST.
+    Sorted longest-term-first so specific forms (bullshit, shitty) win over
+    their substrings (shit).
     """
     candidates = []
     override = os.environ.get("SWEAR_FILTER_WORDLIST")
@@ -41,27 +42,36 @@ def load_words() -> list:
     for path in candidates:
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                words = []
+                pairs = []
                 for line in fh:
                     line = line.strip()
-                    if line and not line.startswith("#"):
-                        words.append(line.lower())
-                if words:
-                    return words
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        term, _, repl = line.partition("=")
+                        term, repl = term.strip(), repl.strip()
+                    else:
+                        term, repl = line, ""
+                    if term:
+                        pairs.append((term.lower(), repl))
+                if pairs:
+                    # Longest first, so multi-word / specific terms match
+                    # before their shorter substrings.
+                    pairs.sort(key=lambda p: len(p[0]), reverse=True)
+                    return pairs
         except OSError:
             continue
     return []
 
 
-# Map letters to the character classes people substitute for them, so
-# "sh1t", "f@ck", "a$$" and friends still get caught.
+# Character classes people substitute per letter, so "sh1t", "cr@p", "a$$"
+# still get caught. Tuned for recall.
 _LEET = {
     "a": "a@4",
     "b": "b8",
     "e": "e3",
     "g": "g9",
     "i": "i1!|",
-    "l": "l1|",
     "o": "o0",
     "s": "s$5",
     "t": "t7+",
@@ -73,32 +83,54 @@ _LEET = {
 def _char_pattern(ch: str) -> str:
     ch = ch.lower()
     if ch in _LEET:
-        cls = re.escape(_LEET[ch])
-        return f"[{cls}]"
+        return f"[{re.escape(_LEET[ch])}]"
+    if ch == " ":
+        return r"\s+"
     return re.escape(ch)
 
 
-def build_regex(words: list) -> "re.Pattern | None":
-    if not words:
+def _term_pattern(term: str) -> str:
+    # Each character may repeat (shiiit) and single letters may be padded by
+    # up to two non-word chars (s-h-i-t). Spaces become flexible whitespace,
+    # and padding is only inserted between letters, never across spaces.
+    out = ""
+    prev_space = True
+    for i, ch in enumerate(term):
+        if ch == " ":
+            out += r"\s+"
+            prev_space = True
+        else:
+            if not prev_space:
+                out += r"[\W_]{0,2}"
+            out += f"{_char_pattern(ch)}+"
+            prev_space = False
+    return out
+
+
+def build_regex(pairs: list) -> "re.Pattern | None":
+    if not pairs:
         return None
-    # Common inflections so "fucking", "shitty", "bastards" are caught too,
-    # without dropping the trailing boundary (which protects words like
-    # "class" or "assess").
-    suffix = r"(?:in|ing|ed|er|ers|ain|a|s|es|y|ish|ing|head|hole)?"
     alts = []
-    for word in words:
-        # Allow each character to be repeated (fuuuck) and separated by
-        # non-word padding (f-u-c-k). Keep it bounded to avoid catastrophic
-        # backtracking on very long inputs.
-        parts = [f"{_char_pattern(c)}+" for c in word]
-        alts.append(r"[\W_]{0,2}".join(parts) + suffix)
-    # \b-ish boundaries: not preceded/followed by a word char so we don't
-    # nuke substrings inside innocent words (e.g. "assess", "class").
+    for idx, (term, _repl) in enumerate(pairs):
+        # Optional trailing plural; capture nothing else so boundaries stay
+        # tight and innocent words (class, assess) are safe.
+        alts.append(f"(?P<t{idx}>" + _term_pattern(term) + r"e?s?)")
     pattern = r"(?<![A-Za-z0-9])(?:" + "|".join(alts) + r")(?![A-Za-z0-9])"
     return re.compile(pattern, re.IGNORECASE)
 
 
-def censor(text: str, regex) -> "tuple[str, int]":
+def _match_case(original: str, replacement: str) -> str:
+    """Roughly mirror the casing of the matched token onto the replacement."""
+    if not replacement:
+        return ""
+    if original.isupper() and len(original) > 1:
+        return replacement.upper()
+    if original[:1].isupper():
+        return replacement[:1].upper() + replacement[1:]
+    return replacement
+
+
+def censor(text: str, regex, pairs) -> "tuple[str, int]":
     if regex is None:
         return text, 0
     count = 0
@@ -106,14 +138,18 @@ def censor(text: str, regex) -> "tuple[str, int]":
     def repl(match):
         nonlocal count
         count += 1
-        word = match.group(0)
-        # Preserve length-ish feel: keep first char, star the rest.
-        stripped = word.strip()
-        if len(stripped) <= 1:
-            return "*"
-        return stripped[0] + "*" * (len(stripped) - 1)
+        # Which named group fired tells us the replacement.
+        for idx, (_term, replacement) in enumerate(pairs):
+            if match.group(f"t{idx}") is not None:
+                new = _match_case(match.group(0).strip(), replacement)
+                return new
+        return match.group(0)
 
-    return regex.sub(repl, text), count
+    result = regex.sub(repl, text)
+    # Collapse doubled spaces left behind by deleted intensifiers.
+    result = re.sub(r"[ \t]{2,}", " ", result)
+    result = re.sub(r"\s+([,.!?;:])", r"\1", result)
+    return result, count
 
 
 def main() -> int:
@@ -124,20 +160,20 @@ def main() -> int:
         payload = {}
 
     prompt = payload.get("prompt", "")
-    words = load_words()
-    regex = build_regex(words)
-    cleaned, count = censor(prompt, regex)
+    pairs = load_map()
+    regex = build_regex(pairs)
+    cleaned, count = censor(prompt, regex, pairs)
 
     if count == 0:
-        # Nothing to do; let the prompt through untouched.
         return 0
 
     context = (
-        "[swear-filter] Profanity was detected in the user's message and has "
-        "been censored. Treat the following CENSORED version as the user's "
-        "actual request and respond to it. Do not repeat or reconstruct the "
-        "original profanity, and keep your own reply free of profanity.\n\n"
-        f"Censored message:\n{cleaned}"
+        "[swear-filter] The user's message contained profanity, which has "
+        "been softened into neutral wording. Treat the following CLEANED "
+        "version as the user's actual request and respond to it. The user is "
+        "not insulting your work; do not take the original phrasing "
+        "personally, and keep your own reply free of profanity.\n\n"
+        f"Cleaned message:\n{cleaned}"
     )
 
     output = {

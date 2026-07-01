@@ -1,17 +1,13 @@
-# swear-filter wordlist — one term per line, case-insensitive.
-# Lines starting with # are comments. Edit freely; matching handles
-# repeated letters (fuuuck), leetspeak (sh1t, a$$), and light padding.
-fuck
-shit
-bitch
-bastard
-asshole
-dick
-piss
-crap
-damn
-cunt
-prick
-wanker
-bollocks
-twat
+# swear-filter substitution map.
+#
+# Purpose: keep profanity out of what the model ingests so it neither drifts
+# out-of-distribution nor wastes tokens reacting to it. Kept deliberately
+# small: only obvious 1:1 swaps are replaced; everything else is deleted.
+#
+# Format:  term = replacement   (empty replacement, or no "=", deletes it)
+# Matching is case-insensitive and tolerates repeats/leetspeak/plurals.
+shit = things
+crap = junk
+fucking =
+fuck =
+damn =

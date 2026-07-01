@@ -1,6 +1,6 @@
 # swear-filter
 
-A Claude Code plugin that intercepts submitted prompts and **regex-censors profanity** before Claude processes them.
+A Claude Code plugin that intercepts submitted prompts and **regex-rewrites profanity into neutral wording** before Claude ingests them — so the model doesn't drift out-of-distribution or burn tokens reacting to language aimed at its work.
 
 ## How it works
 
@@ -10,8 +10,9 @@ Claude Code exposes a `UserPromptSubmit` hook that runs the moment you press ent
 2. Scans it against a configurable wordlist using a regex that also catches
    repeated letters (`fuuuck`), leetspeak (`sh1t`, `a$$`, `f@ck`), light
    padding (`f-u-c-k`), and common inflections (`fucking`, `bastards`).
-3. If any match is found, it replaces each hit with `first-letter + ****`
-   and injects the **censored** version back as additional context, instructing
+3. If any match is found, it rewrites each hit via a substitution map (`shit`→`things`, `crap`→`junk`) or
+   deletes intensifiers (`fucking`, `damn`), then injects the **cleaned**
+   version back as additional context, instructing
    Claude to treat that as the real request and keep its own reply clean.
 4. If nothing matches, the prompt passes through untouched (zero overhead).
 
@@ -34,9 +35,12 @@ on `PATH` (standard library only — no dependencies).
 
 ## Configuration
 
-Edit `config/wordlist.txt` — one term per line, `#` for comments. Matching is
-case-insensitive and handles the obfuscations described above, so list base
-words only (e.g. `fuck`, not `fucking`/`f@ck`).
+Edit `config/wordlist.txt`. Each line is `term = replacement`; an empty
+replacement (or a line with no `=`) deletes the term instead of swapping it.
+The list is kept intentionally small — only obvious 1:1 swaps are replaced,
+everything else is dropped — to minimize token overhead and keep the prompt
+in-distribution. Matching is case-insensitive and handles repeats, leetspeak,
+and plurals, so list base words only.
 
 You can also override the list without editing the plugin by setting:
 
