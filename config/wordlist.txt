@@ -1,0 +1,17 @@
+# swear-filter wordlist — one term per line, case-insensitive.
+# Lines starting with # are comments. Edit freely; matching handles
+# repeated letters (fuuuck), leetspeak (sh1t, a$$), and light padding.
+fuck
+shit
+bitch
+bastard
+asshole
+dick
+piss
+crap
+damn
+cunt
+prick
+wanker
+bollocks
+twat

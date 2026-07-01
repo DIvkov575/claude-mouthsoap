@@ -1,0 +1,9 @@
+{
+  "name": "swear-filter",
+  "description": "Intercepts submitted prompts and regex-censors profanity before Claude processes them.",
+  "version": "0.1.0",
+  "author": {
+    "name": "divkov"
+  },
+  "hooks": "./hooks/hooks.json"
+}
