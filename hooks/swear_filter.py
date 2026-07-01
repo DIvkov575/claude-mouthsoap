@@ -90,20 +90,15 @@ def _char_pattern(ch: str) -> str:
 
 
 def _term_pattern(term: str) -> str:
-    # Each character may repeat (shiiit) and single letters may be padded by
-    # up to two non-word chars (s-h-i-t). Spaces become flexible whitespace,
-    # and padding is only inserted between letters, never across spaces.
+    # Each character may repeat (shiiit); leetspeak is handled per-character.
+    # Spaces become flexible whitespace. No inter-letter padding — obfuscation
+    # via separators (s-h-i-t) is intentionally not matched.
     out = ""
-    prev_space = True
-    for i, ch in enumerate(term):
+    for ch in term:
         if ch == " ":
             out += r"\s+"
-            prev_space = True
         else:
-            if not prev_space:
-                out += r"[\W_]{0,2}"
             out += f"{_char_pattern(ch)}+"
-            prev_space = False
     return out
 
 

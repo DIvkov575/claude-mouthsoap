@@ -5,9 +5,32 @@
 # small: only obvious 1:1 swaps are replaced; everything else is deleted.
 #
 # Format:  term = replacement   (empty replacement, or no "=", deletes it)
-# Matching is case-insensitive and tolerates repeats/leetspeak/plurals.
+# Matching is case-insensitive and tolerates repeated letters and leetspeak.
+# Common misspellings are listed explicitly (curated, not fuzzy) so they map
+# to the same result as the base word without catching real words.
+
+# shit -> things
 shit = things
+shyt = things
+sht = things
+
+# crap -> junk
 crap = junk
+crp = junk
+krap = junk
+
+# fucking -> deleted
 fucking =
+fukin =
+fuckin =
+fuking =
+
+# fuck -> deleted
 fuck =
+fuk =
+fck =
+fuq =
+phuck =
+
+# damn -> deleted  (no safe misspelling: "dam" is a real word)
 damn =
