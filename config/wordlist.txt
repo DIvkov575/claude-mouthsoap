@@ -1,43 +1,29 @@
-# swear-filter substitution map.
-#
-# Purpose: keep profanity out of what the model ingests so it neither drifts
-# out-of-distribution nor wastes tokens reacting to it. Kept deliberately
-# small: only obvious 1:1 swaps are replaced; everything else is deleted.
-#
-# Format:  term = replacement   (empty replacement, or no "=", deletes it)
-# Matching is case-insensitive and tolerates repeated letters and leetspeak.
-# Common misspellings are listed explicitly (curated, not fuzzy) so they map
-# to the same result as the base word without catching real words.
+# swear-filter wordlist — one term or phrase per line, deleted on match.
+# Case-insensitive; tolerates repeated letters, leetspeak, and a trailing
+# plural. Curated misspellings are listed explicitly (no fuzzy matching).
+# Lines starting with # are comments.
 
-# shit -> things
-shit = things
-shyt = things
-sht = things
+shit
+shyt
+sht
 
-# crap -> junk
-crap = junk
-crp = junk
-krap = junk
+crap
+crp
+krap
 
-# fucking -> deleted
-fucking =
-fukin =
-fuckin =
-fuking =
+fucking
+fuckin
+fuking
+fukin
 
-# fuck -> deleted
-fuck =
-fuk =
-fck =
-fuq =
-phuck =
+fuck
+fuk
+fck
+fuq
+phuck
 
-# damn -> deleted  (no safe misspelling: "dam" is a real word)
-damn =
+damn
 
-# Phrases -> deleted entirely. Listed before single words matter only for
-# readability; the engine already matches the longest term first, so these
-# win over their component words (e.g. "fuck you" beats "fuck").
-you piece of shit =
-fuck you =
-fuck this =
+you piece of shit
+fuck you
+fuck this
