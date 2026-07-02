@@ -34,3 +34,14 @@ phuck =
 
 # damn -> deleted  (no safe misspelling: "dam" is a real word)
 damn =
+
+# Phrases -> deleted entirely. Listed before single words matter only for
+# readability; the engine already matches the longest term first, so these
+# win over their component words (e.g. "fuck you" beats "fuck").
+you piece of shit =
+piece of shit =
+fuck you =
+fuck this =
+fuck that =
+fuck off =
+screw you =
