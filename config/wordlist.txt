@@ -1,27 +1,10 @@
-# swear-filter wordlist — one term or phrase per line, deleted on match.
-# Case-insensitive; tolerates repeated letters, leetspeak, and a trailing
-# plural. Curated misspellings are listed explicitly (no fuzzy matching).
-# Lines starting with # are comments.
+# swear-filter wordlist — one word or phrase per line, deleted on match.
+# Case-insensitive, whole-word. Lines starting with # are comments.
 
 shit
-shyt
-sht
-
 crap
-crp
-krap
-
 fucking
-fuckin
-fuking
-fukin
-
 fuck
-fuk
-fck
-fuq
-phuck
-
 damn
 
 you piece of shit
