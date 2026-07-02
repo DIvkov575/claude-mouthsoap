@@ -1,9 +1,9 @@
-# swear-filter wordlist — one word or phrase per line, deleted on match.
-# Case-insensitive, whole-word. Lines starting with # are comments.
+# swear-filter wordlist — one stem or phrase per line, deleted on match.
+# Each stem matches its whole word family (shit -> shitty/shits) and tolerates
+# stretched letters (fuuuck). Case-insensitive. # starts a comment.
 
 shit
 crap
-fucking
 fuck
 damn
 

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """swear-filter UserPromptSubmit hook.
 
-Deletes swear words/phrases from the submitted prompt before Claude sees it,
-so deliberate venting doesn't reach the model. Terms live in
-config/wordlist.txt (one per line). Plain case-insensitive whole-word match —
-no obfuscation handling, because the user isn't trying to evade their own filter.
+Deletes swearing from the submitted prompt before Claude sees it, so
+deliberate venting doesn't reach the model. Stems live in config/wordlist.txt
+(one per line). Each stem matches its whole word family — inflections
+(shit -> shitty, shits; fuck -> fucking, fucker) — and tolerates stretched
+letters (fuuuck, shiiit). Case-insensitive. No leetspeak/obfuscation handling:
+the user isn't trying to evade their own filter.
 """
 
 import json
@@ -20,7 +22,7 @@ def load_terms() -> list:
         os.path.join(root, "config", "wordlist.txt")
     try:
         with open(path, encoding="utf-8") as fh:
-            terms = [ln.strip() for ln in fh
+            terms = [ln.strip().lower() for ln in fh
                      if ln.strip() and not ln.startswith("#")]
     except OSError:
         return []
@@ -28,10 +30,16 @@ def load_terms() -> list:
     return sorted(terms, key=len, reverse=True)
 
 
+def _word(stem: str) -> str:
+    # Each letter repeatable (fuuuck); trailing \w* absorbs the rest of the
+    # word family (shit -> shitty, fuck -> fucking/fucker).
+    return "".join(re.escape(c) + "+" for c in stem) + r"\w*"
+
+
 def build_regex(terms):
     if not terms:
         return None
-    body = "|".join(re.escape(t) for t in terms)
+    body = "|".join(r"\s+".join(_word(w) for w in t.split()) for t in terms)
     return re.compile(rf"\b(?:{body})\b", re.IGNORECASE)
 
 
