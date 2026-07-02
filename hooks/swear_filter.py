@@ -30,10 +30,16 @@ def load_terms() -> list:
     return sorted(terms, key=len, reverse=True)
 
 
+# Real English inflection/derivation suffixes, so a stem matches its word
+# family (shit -> shitty/shits/shithead) but NOT unrelated words that merely
+# start with it (shiitake, crapshoot, crappie).
+_SUFFIX = (r"(?:s|es|ed|ing|in|er|ers|y|ty|ies|ier|iest|"
+           r"head|heads|hole|holes|face|bag|bags)?")
+
+
 def _word(stem: str) -> str:
-    # Each letter repeatable (fuuuck); trailing \w* absorbs the rest of the
-    # word family (shit -> shitty, fuck -> fucking/fucker).
-    return "".join(re.escape(c) + "+" for c in stem) + r"\w*"
+    # Each letter repeatable (fuuuck) + a bounded inflection suffix.
+    return "".join(re.escape(c) + "+" for c in stem) + _SUFFIX
 
 
 def build_regex(terms):
