@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """swear-filter UserPromptSubmit hook.
 
-Deletes swearing from the submitted prompt before Claude sees it, so
-deliberate venting doesn't reach the model. Stems live in config/wordlist.txt
-(one per line). Each stem matches its whole word family — inflections
-(shit -> shitty, shits; fuck -> fucking, fucker) — and tolerates stretched
-letters (fuuuck, shiiit). Case-insensitive. No leetspeak/obfuscation handling:
-the user isn't trying to evade their own filter.
+Blocks prompts containing swearing before Claude ever sees them. Unlike a
+context-injection approach, UserPromptSubmit has no way to substitute the
+prompt text the model receives — the only way to guarantee the model never
+sees the original wording is to reject the prompt outright (top-level
+decision:"block") and have the user resubmit. Stems live in
+config/wordlist.txt (one per line). Each stem matches its whole word family —
+inflections (shit -> shitty, shits; fuck -> fucking, fucker) — and tolerates
+stretched letters (fuuuck, shiiit). Case-insensitive. No leetspeak/obfuscation
+handling: the user isn't trying to evade their own filter.
 """
 
 import json
@@ -70,14 +73,17 @@ def main() -> int:
     if not n:
         return 0
 
-    print(json.dumps({"hookSpecificOutput": {
-        "hookEventName": "UserPromptSubmit",
-        "additionalContext": (
-            "[swear-filter] Profanity was removed from the user's message. "
-            "Treat the following as the actual request; the user is not "
-            "insulting your work.\n\n"
-            f"Cleaned message:\n{cleaned}"),
-    }}))
+    # decision:"block" erases the prompt outright — this is the only
+    # UserPromptSubmit mechanism that keeps the original wording from ever
+    # reaching the model (additionalContext only supplements, it can't
+    # replace what the model receives).
+    print(json.dumps({
+        "decision": "block",
+        "reason": (
+            "[swear-filter] Message blocked for profanity — resubmit "
+            "without it. Suggested rewrite:\n\n" + cleaned
+        ),
+    }))
     return 0
 
 

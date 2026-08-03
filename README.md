@@ -1,25 +1,30 @@
 # swear-filter
 
-A Claude Code plugin that intercepts submitted prompts and **regex-rewrites profanity into neutral wording** before Claude ingests them — so the model doesn't drift out-of-distribution or burn tokens reacting to language aimed at its work.
+A Claude Code plugin that intercepts submitted prompts containing profanity and **blocks them outright** before Claude ever ingests them — so the model never sees language aimed at its work, and never drifts out-of-distribution or burns tokens reacting to it.
 
 ## How it works
 
 Claude Code exposes a `UserPromptSubmit` hook that runs the moment you press enter, *before* the prompt reaches the model. This plugin registers a Python hook there that:
 
 1. Reads the submitted prompt from the hook payload (stdin JSON).
-2. Scans it against a configurable wordlist using a regex that also catches
-   repeated letters (`fuuuck`), leetspeak (`sh1t`, `a$$`, `f@ck`), light
-   padding (`f-u-c-k`), and common inflections (`fucking`, `bastards`).
-3. If any match is found, it rewrites each hit via a substitution map (`shit`→`things`, `crap`→`junk`) or
-   deletes intensifiers (`fucking`, `damn`), then injects the **cleaned**
-   version back as additional context, instructing
-   Claude to treat that as the real request and keep its own reply clean.
+2. Scans it against a configurable wordlist (`config/wordlist.txt`) using a
+   regex that also catches repeated letters (`fuuuck`) and common inflections
+   (`fucking`, `shitty`, `bastards`).
+3. If any match is found, it returns `decision:"block"` — Claude Code erases
+   the prompt and never forwards it to the model. The `reason` field carries a
+   suggested clean rewrite so you can resubmit quickly.
 4. If nothing matches, the prompt passes through untouched (zero overhead).
 
-> **Note on scope:** hooks can inspect/augment an incoming prompt, but Claude
-> Code has no hook that rewrites text already rendered in your terminal. So the
-> censoring is applied to what the *model* sees and is asked to mirror in its
-> replies — the raw text you typed still appears in your own scrollback.
+> **Why block instead of rewrite-in-place:** `UserPromptSubmit` has no field
+> that substitutes the text the model receives — a hook can only *add*
+> `additionalContext` alongside the original prompt, or block it outright.
+> Since the goal is to guarantee the model never sees the raw wording,
+> blocking (and asking you to resubmit) is the only mechanism that achieves
+> that; injecting a "cleaned" version alongside the original does not — the
+> model still receives the raw text either way.
+>
+> **Note on scope:** the raw text you typed still appears in your own
+> terminal scrollback — this plugin only controls what reaches the model.
 
 Word boundaries are enforced so innocent words are safe: `class`, `assess`,
 and `passing` are never touched.
@@ -35,12 +40,10 @@ on `PATH` (standard library only — no dependencies).
 
 ## Configuration
 
-Edit `config/wordlist.txt`. Each line is `term = replacement`; an empty
-replacement (or a line with no `=`) deletes the term instead of swapping it.
-The list is kept intentionally small — only obvious 1:1 swaps are replaced,
-everything else is dropped — to minimize token overhead and keep the prompt
-in-distribution. Matching is case-insensitive and handles repeats, leetspeak,
-and plurals, so list base words only.
+Edit `config/wordlist.txt`. One stem or phrase per line; `#` starts a
+comment. Matching is case-insensitive and handles repeated letters and
+inflections automatically, so list base words only (e.g. `shit` also catches
+`shitty`/`shits`).
 
 You can also override the list without editing the plugin by setting:
 

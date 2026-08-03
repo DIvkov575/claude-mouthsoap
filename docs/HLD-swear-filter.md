@@ -139,10 +139,13 @@ tolerance).
 **Compatibility:** no third-party dependencies; runs on the observed Python
 3.14.5. Editing the wordlist requires no code change.
 
-## 5. Open Questions
-- `additionalContext` appends the cleaned prompt but does not remove the original
-  submitted text from the model's input. Should the design pursue a mechanism
-  that replaces rather than supplements the original prompt, or is supplement-plus-
-  instruction the intended contract?
-- Terms that are not clean 1:1 swaps (`shitty`, `fucked`) are currently
-  unmatched. Are they to remain out of scope, mapped, or added to the delete set?
+## 5. Resolved / Open Questions
+- **Resolved (2026-08-03):** `UserPromptSubmit` has no field that substitutes
+  the prompt text the model receives — `additionalContext` only supplements
+  it. The hook now returns top-level `decision:"block"` on any match, which
+  erases the prompt before the model sees it; `reason` carries a suggested
+  clean rewrite for the user to resubmit. This replaces the
+  additionalContext-injection behavior described in §2/§3 above.
+- Terms that are not clean 1:1 swaps (`shitty`, `fucked`) are matched via the
+  inflection-suffix regex (`_SUFFIX` in `swear_filter.py`), not a separate
+  map entry — the delete-only wordlist plus suffix tolerance covers them.
